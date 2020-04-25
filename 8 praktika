@@ -1,0 +1,243 @@
+##################################################################################### 8 praktika
+###########PAULIUS TUSAS
+library(Rcmdr)
+library(MASS)
+data("birthwt")
+?birthwt
+library(car)
+birthwt$low_cat <- recode(birthwt$low, '"1"=1; "0"=0', as.factor=TRUE)
+attach(birthwt)
+
+
+Nulinis <- glm(low ~ smoke, family=binomial(logit), data=birthwt)
+summary(Nulinis)
+
+birthwt$low_cat <- with(birthwt, factor(low_cat, levels=c('1','0')))
+lowtable <- xtabs(~low_cat, data=birthwt)
+lowtable
+####1 UZDUOTIS. Apskaiciuokite jautruma, specifiskumą, PPV, NPV, tiketinumo santykius modeliui Nulinis.
+birthwt$fitted_Nulinis_cat <- recode(Nulinis$fitted.values, '0.5:hi=1; else=0', as.factor=TRUE)
+birthwt$fitted_Nulinis_cat <- with(birthwt, factor(fitted_Nulinis_cat, levels=c('1','0')))
+Table_Nulinis <- xtabs(~low_cat+birthwt$fitted_Nulinis_cat, data=birthwt)
+Table_Nulinis
+
+library(epiR, pos=4)
+epi.tests(Table_Nulinis)
+###PPV = 0.00, NPV = 1.00, PLR = NaN, NLR = NaN, nes neturime reikiamu reiksmiu lenteleje.
+
+
+####cut-off value =0.4
+birthwt$fitted_Nulinis_cat2 <- recode(Nulinis$fitted.values, '0.4:hi=1; else=0', as.factor=TRUE)
+birthwt$fitted_Nulinis_cat2 <- with(birthwt, factor(fitted_Nulinis_cat2, levels=c('1','0')))
+Table_Nulinis2 <- xtabs(~low_cat+birthwt$fitted_Nulinis_cat2, data=birthwt)
+Table_Nulinis2
+
+###JAUTRUMAS = TP/(TP+FN)
+30/(30+44)
+##Jautrumas = 0.4054054 (40.54%)
+
+###SPECIFISKUMAS = TN/(TN+FP)
+86/(86+29)
+##Specifiskumas = 0.7478261 (74.78%)
+
+library(epiR, pos=4)
+epi.tests(Table_Nulinis2)
+###PPV = 0.51, NPV = 0.66, PLR = 1.61, NLR = 0.80
+
+######## 2 UZDUOTIS. Pakartokite paskaitos skaiciavimus 7 praktikos modeliui su rases kintamuoju.
+birthwt$race_w<-recode(birthwt$race, '"1"=1; "2"=0; "3"=0', as.factor=FALSE)
+birthwt$race_b<-recode(birthwt$race, '"1"=0; "2"=1; "3"=0', as.factor=FALSE)
+birthwt$race_o<-recode(birthwt$race, '"1"=0; "2"=0; "3"=1', as.factor=FALSE)
+#Taip pat reikia atsisakyti vieno veiksnio ir jie turi buti kiekybiniai
+
+Pirmas <- glm(low ~ smoke + ht + lwt + race_b + race_o, family=binomial(logit), data=birthwt)
+summary(Pirmas)
+vif(Pirmas)
+exp(coef(Pirmas)) #sansu santykiai
+Confint(Pirmas, level=0.95, type="Wald") #logaritmuoti
+Confint(Pirmas, level=0.95, type="Wald", exponentiate=TRUE) #be logaritmo OR ir 95 proc. CI
+
+library(DescTools) #Atsinaujinti R i 3.6!!!
+PseudoR2(Pirmas, c("McFadden", "Nagel"))
+
+#Apskaiciuokite modelio klasifikavimo lentele su kritine reiksme 0.5.
+birthwt$fitted_cat <- recode(Pirmas$fitted.values, '0.5:hi=1; else=0', as.factor=TRUE)
+birthwt$fitted_cat <- with(birthwt, factor(fitted_cat, levels=c('1','0')))
+Table_Pirmas <- xtabs(~low_cat+birthwt$fitted_cat, data=birthwt)
+Table_Pirmas
+#Lenteleje vel pirmas turi buti rizikos veiksnys. Klasifikavimo lentele turetu buti tik tokia.
+rowPercents(Table_Pirmas)
+#Ats: 16 (27.1 proc.) atveju tinkamai klasifikuota, kai mazas svoris, o 43 (72.9 proc.) - neteisingai.
+(27.1+94.6)/2
+#Ats: Vidutiniskai modelio teisingas klasifikuojamumas lygus 60.85 proc.
+
+### JAUTRUMAS, SPECIFISKUMAS, PPV, NPV, tiketinumo santykiai
+epi.tests(Table_Pirmas)
+
+###ROC kreive
+library(pROC)
+options(device="RStudioGD")
+roc_Pirmas<-roc(low~Pirmas$fitted.values, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_Pirmas
+#AUC#0.7179
+
+roc_Nulinis<-roc(low~Nulinis$fitted.values, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_Nulinis
+#AUC= 0.585
+
+#Hypothesis for AUC comparison
+roc.test(roc_Pirmas, roc_Nulinis)
+roc.test.obj <- roc.test(roc_Pirmas, roc_Nulinis, paired=TRUE, 
+                         alternative='two.sided', boot.n=2000)
+
+#two ROC curves in one chart
+plot(roc_Pirmas, print.auc=TRUE, type="l", col="red")
+lines(roc_Nulinis, print.auc=TRUE, type="l", col="blue")
+text(0.5, 0.55, sprintf("AUC: %1.3f (%1.3f–%1.3f)", roc_Nulinis$ci[1], roc_Nulinis$ci[2], roc_Nulinis$ci[3]), adj = c(0,.5), col = "blue")
+text(0.5, 0.4, labels=paste('p-value = ', format.pval(roc.test.obj$p.value), sep=''), adj=c(0, .5))
+legend("bottomright", legend=c("Pirmas", "Nulinis"), col=c("red", "blue"), lty=1, lwd=2.5, bty='n', cex=0.9)
+
+#Hosmer-Lemeshow Goodness of Fit (GOF) Test
+library(ResourceSelection)
+hoslem.test(low, Nulinis$fitted.values, g=10)
+hoslem.test(low, Pirmas$fitted.values, g=10)
+detach(birthwt)
+
+#ATS: Pirmojo modelio (su rases kintamuoju) savybes yra geresnes (didesnis AUC) nei Nulinio (be rases kintamojo), skirtumas statistiskai reiksmingas. p=0.003041.
+
+############ 3 UZDUOTIS. Atidarykite prie paketo pROC esancius aSAH duomenis. Susipazinkite su duomenimis.
+library(pROC)
+data(aSAH)
+?aSAH
+summary(aSAH)
+
+
+######### 4 UZDUOTIS. Visiems duomenu rinkinio kiekybiniams kintamiesiems nubraizykite ROC kreives.
+#Ar sie kintamieji bus "naudingi" logistineje regresijoje outcome prognozuoti?
+#Kiekybiniai kintamieji - age, s100b, ndka
+attach(aSAH)
+roc_age<-roc(outcome~age, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_age
+#Area under the curve: 0.615
+#95% CI: 0.5082-0.7219
+
+roc_s100b<-roc(outcome~s100b, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_s100b
+#Area under the curve: 0.7314
+#95% CI: 0.6301-0.8326
+
+roc_ndka<-roc(outcome~ndka, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_ndka
+#Area under the curve: 0.612
+#95% CI: 0.5012-0.7227
+
+##ATS: amziaus, s100b ir ndka kiekybiniu kintamuju Area Under the Curve yra didesni nei 0.5, PI - taip pat, tad sie kintamieji yra tinkami outcome prognozuoti.
+
+
+######### 5 UZDUOTIS. 4 punkto išvada patikrinkite sudarydami vieno kintamojo logistines regresijos modelius outcome prognozuoti.
+outcome<-factor(outcome, levels(outcome)[c(2,1)])
+LM_age <- glm(outcome ~ age, family=binomial(logit), data=aSAH)
+summary(LM_age)
+exp(coef(LM_age)) #sansu santykiai
+Confint(LM_age, level=0.95, type="Wald") #logaritmuoti
+Confint(LM_age, level=0.95, type="Wald", exponentiate=TRUE) #be logaritmo OR ir 95 proc. CI
+###modelis ir amziaus kintamasis - reiksmingai nusako outcome.
+
+LM_s100b <- glm(outcome ~ s100b, family=binomial(logit), data=aSAH)
+summary(LM_s100b)
+exp(coef(LM_s100b)) #sansu santykiai
+Confint(LM_s100b, level=0.95, type="Wald", exponentiate=TRUE)
+###modelis ir s100b kintamasis - reiksmingai nusako outcome.
+
+LM_ndka <- glm(outcome ~ ndka, family=binomial(logit), data=aSAH)
+summary(LM_ndka)
+exp(coef(LM_ndka)) #sansu santykiai
+Confint(LM_ndka, level=0.95, type="Wald", exponentiate=TRUE)
+## modelis reiksmingas, taciau ndka reiksmingai nenusako outcome.
+
+
+######### 6 UZDUOTIS. Sudarykite daugelio kintamuju binarines logistines regresijos modeli modeliuoti ir prognozuoti outcome kintamaji.
+LM_all <- glm(outcome ~ gender+age+s100b+ndka, family=binomial(logit), data=aSAH)
+summary(LM_all)
+
+#Suskaiciuokite modelio jautruma, specifiskumą, PPV, NPV, tiketinumo santykius. 
+vif(LM_all)
+exp(coef(LM_all)) #sansu santykiai
+Confint(LM_all, level=0.95, type="Wald", exponentiate=TRUE) #be logaritmo OR ir 95 proc. CI
+
+library(DescTools)
+PseudoR2(LM_all, c("McFadden", "Nagel"))
+
+#Mdelio klasifikavimo lentele su kritine reiksme 0.5.
+aSAH$fitted_cat <- recode(LM_all$fitted.values, '0.32:hi=1; else=0', as.factor=TRUE)
+aSAH$fitted_cat <- with(aSAH, factor(fitted_cat, levels=c('1','0')))
+Table_LM_all <- xtabs(~outcome+aSAH$fitted_cat, data=aSAH)
+Table_LM_all
+rowPercents(Table_LM_all)
+(23.6+26.8)/2
+#Ats: Vidutiniskai modelio teisingas klasifikuojamumas lygus 25.2 proc.
+
+### JAUTRUMAS, SPECIFISKUMAS, PPV, NPV, tiketinumo santykiai
+epi.tests(Table_LM_all)
+
+#Nubraizykite ROC kreive. Naudokime visus duomenu rinkinio kintamuosius. GALVOKITE APIE MEDICININE PRASME :)
+roc_LM_all<-roc(outcome~LM_all$fitted.values, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_LM_all
+#ATS: modelio savybes pakankamai geros outcome prognozuoti, AUC = 0.8096, CI [0.725-0.8942]
+
+
+########### 7 UZDUOTIS. Kintamiesiems ndka ir s100b apskaičiuokite kritines reikšmes (threshold). 
+#Pagal pROC kreives:
+#threshold ndka = 11.08 (0.51,0.71)
+
+#threshold s100b - 0.20 (0.81,0.63)
+
+
+#Sukurkite naujus binarinius kintamuosius, t.y. daugiau/mažiau atitinkamai ndka ir s100b kritinė reikšmė.
+aSAH$ndka_cat <- recode(aSAH$ndka, 'lo:11.08=1; else=2', as.factor=TRUE)
+aSAH$s100b_cat <- recode(aSAH$s100b, 'lo:0.2=1; else=2', as.factor=TRUE)
+attach(aSAH)
+
+#Pakartokite 6 modelį, kai kiekybiniai ndka ir s100b kintamieji pakeisti jų binariniais analogais. Ar pagerėjo/pablogėjo modelio savybės?
+LM_kokyb <- glm(outcome ~ gender+age+s100b_cat+ndka_cat, family=binomial(logit), data=aSAH)
+summary(LM_kokyb)
+
+#Suskaiciuokite modelio jautruma, specifiskumą, PPV, NPV, tiketinumo santykius. 
+vif(LM_kokyb)
+exp(coef(LM_kokyb)) #sansu santykiai
+Confint(LM_kokyb, level=0.95, type="Wald", exponentiate=TRUE) #be logaritmo OR ir 95 proc. CI
+
+#Mdelio klasifikavimo lentele su kritine reiksme 0.5.
+aSAH$fitted_kokyb_cat <- recode(LM_kokyb$fitted.values, '0.36:hi=1; else=0', as.factor=TRUE)
+aSAH$fitted_kokyb_cat <- with(aSAH, factor(fitted_kokyb_cat, levels=c('1','0')))
+Table_LM_kokyb <- xtabs(~outcome+aSAH$fitted_kokyb_cat, data=aSAH)
+Table_LM_kokyb
+rowPercents(Table_LM_kokyb)
+(22.2+26.8)/2
+#Ats: Vidutiniskai modelio teisingas klasifikuojamumas lygus 24.5 proc.
+
+### JAUTRUMAS, SPECIFISKUMAS, PPV, NPV, tiketinumo santykiai
+epi.tests(Table_LM_kokyb)
+
+roc_LM_kokyb<-roc(outcome~LM_kokyb$fitted.values, plot=T, ci=T, of="auc", ci.alpha=0.95, print.auc=T)
+roc_LM_kokyb
+
+#Hypothesis for AUC comparison
+roc.test(roc_LM_all, roc_LM_kokyb)
+roc.test.obj2 <- roc.test(roc_LM_all, roc_LM_kokyb, paired=TRUE, 
+                         alternative='two.sided', boot.n=2000)
+
+#two ROC curves in one chart
+plot(roc_LM_all, print.auc=TRUE, type="l", col="red")
+lines(roc_LM_kokyb, print.auc=TRUE, type="l", col="blue")
+text(0.5, 0.55, sprintf("AUC: %1.3f (%1.3f–%1.3f)", roc_LM_all$ci[1], roc_LM_kokyb$ci[2], roc_LM_all$ci[3]), adj = c(0,.5), col = "blue")
+text(0.5, 0.4, labels=paste('p-value = ', format.pval(roc.test.obj2$p.value), sep=''), adj=c(0, .5))
+legend("bottomright", legend=c("LM_all", "LM_kokyb"), col=c("red", "blue"), lty=1, lwd=2.5, bty='n', cex=0.9)
+
+#Hosmer-Lemeshow Goodness of Fit (GOF) Test
+library(ResourceSelection)
+hoslem.test(outcome, LM_all$fitted.values, g=10)
+hoslem.test(outcome, LM_kokyb$fitted.values, g=10)
+
+##ATS: itraukus kokybinius ndka ir s100b kontamuosius modelio AUC = 0.832, CI[0.7564-0.9075], su kiekybiniais - AUC = 0.809, CI [0.725-0.8942].
+### Su binariniais kintamaisiais modelio savybes pagerejo, taciau modeliu AUC skirtumas nera statistiskai reiksmingas (p=0.4524). 
