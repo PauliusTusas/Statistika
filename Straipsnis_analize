@@ -1,0 +1,44 @@
+#Age
+Table1<-matrix(c(40,4,31,11),2,2,byrow=TRUE)
+Table1
+chisq.test(Table1) # p = 0.07113
+chisq.test(Table1, correct = FALSE) # p = 0.03672
+fisher.test(Table1) # p = 0.04802
+
+#Sex
+Table2<-matrix(c(40,8,31,7),2,2,byrow=TRUE)
+Table2
+chisq.test(Table2) # p = 1
+chisq.test(Table2, correct = FALSE) # p = 0.08314
+fisher.test(Table2) # p = 1
+
+#Tooth location
+Table3<-matrix(c(34,5,37,10),2,2,byrow=TRUE)
+Table3
+chisq.test(Table3) # p = 0.4573
+chisq.test(Table3, correct = FALSE) # p = 0.3036
+fisher.test(Table3) # p = 0.3963
+
+#Tooth type
+Table4<-matrix(c(10,3,61,12),2,2,byrow=TRUE)
+Table4
+fisher.test(Table4) #p = 0.6911
+
+#Caries treatment
+Table5<-matrix(c(39,5,32,10),2,2,byrow=TRUE)
+Table5
+chisq.test(Table5) # p = 0.2164
+chisq.test(Table5, correct = FALSE) # p = 0.1284
+fisher.test(Table5) # p = 0.1608
+
+#Caries location
+Table6<-matrix(c(19,1,52,14),2,2,byrow=TRUE)
+Table6
+fisher.test(Table6) # p = 0.175
+
+#Time before placement
+Table7<-matrix(c(42,7,29,8),2,2,byrow=TRUE)
+Table7
+chisq.test(Table7) # p = 0.5481
+chisq.test(Table7, correct = FALSE) # p = 0.3747
+fisher.test(Table7) # p = 0.4032
