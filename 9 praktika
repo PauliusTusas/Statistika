@@ -1,0 +1,67 @@
+####9 PRAKTIKA P.TUSAS
+###ISGYVENAMUMO MODELIAVIMAS
+library(survival)
+data("veteran")
+?veteran
+library(Rcmdr)
+library(ggplot2)
+library(survminer)
+library(ggfortify)
+attach(veteran)
+###Grazesni grafikai
+km_trt_fit <- survfit(Surv(time, status) ~ trt)
+autoplot(km_trt_fit)
+ggsurvplot(km_trt_fit, data = veteran, pval = TRUE, surv.median.line = 'hv', legend="top", conf.int = TRUE, risk.table = TRUE)
+
+
+###1. Nubraizykite isgyvenamumo kreives ir apskaiciuokite isgyvenamumo laiko medianas (bendrai, pagal gydymo metoda ir lasteles)
+options(device="RStudioGD")
+
+#Bendrai
+attr(veteran, "time1") <- "time"
+attr(veteran, "event") <- "status"
+.Survfit <- survfit(Surv(time, status) ~ 1, conf.type="log", conf.int=0.95, type="kaplan-meier", error="greenwood", data=veteran)
+.Survfit
+survfit(formula = Surv(time, status) ~ 1, data = veteran, error = "greenwood", conf.type = "log", conf.int = 0.95, type = "kaplan-meier")
+plot(.Survfit, conf.int=FALSE, mark.time=TRUE)                    
+quantile(.Survfit, quantiles=c(.25,.5,.75))
+
+#Pagal gydymo metoda:
+detach(veteran)
+veteran$prior_cat <- recode(veteran$prior, '"0"=0; "10"=1', as.factor=TRUE)
+attach(veteran)
+.Survfit2 <- survfit(Surv(time, status) ~ prior_cat, conf.type="log", conf.int=0.95, type="kaplan-meier", error="greenwood", data=veteran)
+.Survfit2
+survfit(formula = Surv(time, status) ~ prior_cat, data = veteran, error = "greenwood", conf.type = "log", conf.int = 0.95, type = "kaplan-meier")
+plot(.Survfit2, col=1:2, lty=1:2, conf.int=FALSE, mark.time=TRUE)
+legend("topright", legend=c("prior_cat=0","prior_cat=1"), col=1:2, lty=1:2, bty="n")
+quantile(.Survfit2, quantiles=c(.25,.5,.75))
+
+#Pagal lasteles:
+.Survfit3 <- survfit(Surv(time, status) ~ celltype, conf.type="log", conf.int=0.95, type="kaplan-meier", error="greenwood", data=veteran)
+.Survfit3
+survfit(formula = Surv(time, status) ~ celltype, data = veteran, error = "greenwood", conf.type = "log", conf.int = 0.95, type = "kaplan-meier")
+plot(.Survfit3, col=1:4, lty=1:4, conf.int=FALSE, mark.time=TRUE)
+legend("topright", legend=c("celltype=squamou","celltype=smallcell", "celltype=adeno", "celltype=large"), col=1:4, lty=1:4, bty="n")
+quantile(.Survfit3, quantiles=c(.25,.5,.75))
+
+###2. Palyginkite isgyvenamumo kreives tarpusavyje
+#Pagal gydyma:
+survdiff(Surv(time,status) ~ prior_cat, rho=0, data=veteran)
+#Isgyvenamumas statistiskai reiksmingai nesiskiria pagal gydant nagrinejamais dviem metodais.
+
+#Pagal lasteliu tipus:
+survdiff(Surv(time,status) ~ celltype, rho=0, data=veteran)
+#Isgyvenamumas statistiskai reiksmingai skiriasi tarp nagrinejamu lasteliu grupiu.
+
+summary(.Survfit)
+summary(.Survfit2)
+summary(.Survfit3)
+
+###3. Sudarykite Kokso proporcingos regresijos modeli mirtingumui prognozuoti. Kovariantems naudokite maksimaliai visus duomenu rinkinio rodiklius.
+Kokso1 <- coxph(Surv(time, status, type="right") ~ age + karno + diagtime + celltype + prior_cat, data = veteran, method = "efron")
+summary(Kokso1)
+vif(Kokso1)
+
+#Vizualizuokite rezultatus panaudojant sia funkcija:
+ggforest(Kokso1, data = veteran)
